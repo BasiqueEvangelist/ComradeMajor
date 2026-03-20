@@ -16,9 +16,9 @@ public class ComradeMajorBot : BackgroundService
     private readonly ILogger<ComradeMajorBot> _logger;
     private readonly BotSettings _settings;
 
-    public ComradeMajorBot(TelegramBotClient botClient, ILogger<ComradeMajorBot> logger, IOptions<BotSettings> settings)
+    public ComradeMajorBot(ILogger<ComradeMajorBot> logger, IOptions<BotSettings> settings)
     {
-        _botClient = botClient;
+        _botClient = new TelegramBotClient(settings.Value.Token);
         _logger = logger;
         _settings = settings.Value;
     }
