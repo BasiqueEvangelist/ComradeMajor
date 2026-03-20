@@ -50,8 +50,13 @@ public class ComradeMajorBot : BackgroundService
 
     async Task HandleUpdateAsync(ITelegramBotClient sender, Update update, CancellationToken cancellationToken)
     {
-        if (update.Type != UpdateType.Message) return;
-        if (update.Message!.From == null) return;
+        if (update.Type != UpdateType.Message || update.Message is null) return;
+        var msg = update.Message;
+        
+        if (msg.From is null) return;
+
+        bool isPersonalChat = msg.Chat.Id == msg.From.Id;
+
         if (update.Message.From.Id != _settings.AdminId)
         {
             _logger.LogInformation("Received message from {UserId}, who isn't an admin, ignoring", update.Message.From.Id);
@@ -119,7 +124,13 @@ public class ComradeMajorBot : BackgroundService
         catch (Exception e)
         {
             _logger.LogError("Failed to process message: {Exception}", e);
-
+            if (isPersonalChat)
+            {
+                await _botClient.SendMessage(
+                    update.Message.Chat,
+                    "Никак нет, товарищ пользователь.\n" + e,
+                    replyParameters: new ReplyParameters { MessageId = update.Message.MessageId });
+            }
             await ReactWith(update.Message, "\ud83e\udd2f", cancellationToken);
         }
     }
