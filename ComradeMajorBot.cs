@@ -1,6 +1,8 @@
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Http;
 using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Types;
@@ -16,7 +18,17 @@ public class ComradeMajorBot : BackgroundService
 
     public ComradeMajorBot(ILogger<ComradeMajorBot> logger, IOptions<BotSettings> settings)
     {
-        _botClient = new TelegramBotClient(settings.Value.Token);
+        var httpClientHandler = new HttpClientHandler();
+
+        if (settings.Value.Proxy is ProxySettings ps && ps.UseProxy && ps.ProxyUrl is string url)
+        {
+            httpClientHandler.Proxy = new WebProxy(url);
+            httpClientHandler.UseProxy = true;
+        };
+
+        var httpClient = new HttpClient(httpClientHandler);
+        
+        _botClient = new TelegramBotClient(settings.Value.Token, httpClient);
         _logger = logger;
         _settings = settings.Value;
     }
