@@ -57,69 +57,20 @@ public class ComradeMajorBot : BackgroundService
 
         bool isPersonalChat = msg.Chat.Id == msg.From.Id;
 
-        if (update.Message.From.Id != _settings.AdminId)
+        if (msg.From.Id != _settings.AdminId)
         {
-            _logger.LogInformation("Received message from {UserId}, who isn't an admin, ignoring", update.Message.From.Id);
+            _logger.LogInformation("Received message from {UserId}, who isn't an admin, ignoring", msg.From.Id);
             return;
         }
 
         try
         {
-            string timestamp = update.Message.Date.ToString("yyyy_MM_dd_HH_mm_ss");
+            string timestamp = msg.Date.ToString("yyyy_MM_dd_HH_mm_ss");
             string prefix = Path.Combine(_settings.TargetFolder, timestamp);
 
-            if (update.Message.Type == MessageType.Text)
-            {
-                string name = GetFileName(prefix, ".txt");
-                await File.WriteAllTextAsync(name, update.Message.Text, cancellationToken: cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Document)
-            {
-                string target = prefix + update.Message.Document!.FileName;
-
-                await Save(update.Message.Document.FileId, prefix, update.Message.Document.FileName, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Photo)
-            {
-                var photo = update.Message.Photo![^1];
-
-                await Save(photo.FileId, prefix, null, cancellationToken);                    
-            }
-            else if (update.Message.Type == MessageType.Video)
-            {
-                await Save(update.Message.Video!.FileId, prefix, null, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Animation)
-            {
-                await Save(update.Message.Animation!.FileId, prefix, null, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Audio)
-            {
-                await Save(update.Message.Audio!.FileId, prefix, null, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Sticker)
-            {
-                await Save(update.Message.Sticker!.FileId, prefix, null, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.VideoNote)
-            {
-                await Save(update.Message.VideoNote!.FileId, prefix, null, cancellationToken);
-            }
-            else if (update.Message.Type == MessageType.Voice)
-            {
-                await Save(update.Message.Voice!.FileId, prefix, null, cancellationToken);
-            }
-            else
-            {
-                return;
-            }
-
-            if (update.Message.Caption != null)
-            {
-                await File.WriteAllTextAsync(prefix + ".txt", update.Message.Caption, cancellationToken: cancellationToken);
-            }
-
-            await ReactWith(update.Message, "\ud83d\udc4d", cancellationToken);
+            var filesWritten = await SaveMessage(msg, prefix, cancellationToken);
+            if (filesWritten)
+                await ReactWith(msg, "\ud83d\udc4d", cancellationToken);
         }
         catch (Exception e)
         {
@@ -127,15 +78,58 @@ public class ComradeMajorBot : BackgroundService
             if (isPersonalChat)
             {
                 await _botClient.SendMessage(
-                    update.Message.Chat,
-                    "Никак нет, товарищ пользователь.\n" + e,
-                    replyParameters: new ReplyParameters { MessageId = update.Message.MessageId });
+                    msg.Chat,
+                    "Никак нет, товарищ пользователь.\n" + e.Message,
+                    replyParameters: new ReplyParameters { MessageId = msg.MessageId });
             }
-            await ReactWith(update.Message, "\ud83e\udd2f", cancellationToken);
+            await ReactWith(msg, "\ud83e\udd2f", cancellationToken);
         }
     }
 
-    private async Task Save(string fileId, string prefix, string? suffix, CancellationToken token)
+    async Task<bool> SaveMessage(Message msg, string prefix, CancellationToken token)
+    {
+        if (msg.Type == MessageType.Text)
+        {
+            string name = GetFileName(prefix, ".txt");
+            await File.WriteAllTextAsync(name, msg.Text, cancellationToken: token);
+        }
+        else if (msg.Type == MessageType.Document)
+        {
+            await Download(msg.Document!.FileId, prefix, msg.Document.FileName, token);
+        }
+        else if (ExtractFileId(msg) is string fileId)
+        {
+            await Download(fileId, prefix, null, token);
+        }
+        else
+        {
+            // Can't process, save nothing.
+            return false;
+        }
+
+        // If file was sent with caption, save it as well
+        if (msg.Caption != null)
+        {
+            await File.WriteAllTextAsync(prefix + ".caption.txt", msg.Caption, cancellationToken: token);
+        }
+
+        return true;
+    }
+
+    string? ExtractFileId(Message msg) => msg.Type switch
+    {
+        MessageType.Document => msg.Document!.FileId,
+        MessageType.Photo => msg.Photo!.Last().FileId,
+        MessageType.Video => msg.Video!.FileId,
+        MessageType.Animation => msg.Animation!.FileId,
+        MessageType.Audio => msg.Audio!.FileId,
+        MessageType.Sticker => msg.Sticker!.FileId,
+        MessageType.VideoNote => msg.VideoNote!.FileId,
+        MessageType.Voice => msg.Voice!.FileId,
+        _ => null
+    };
+
+    private async Task Download(string fileId, string prefix, string? suffix, CancellationToken token)
     {
         var file = await _botClient.GetFile(fileId, cancellationToken: token);
 
