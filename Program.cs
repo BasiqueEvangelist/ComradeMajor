@@ -1,9 +1,8 @@
-﻿// See https://aka.ms/new-console-template for more information
-
-using ComradeMajor;
-using Microsoft.Extensions.Configuration;
+﻿using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+
+using ComradeMajor;
 
 HostApplicationBuilder builder = Host.CreateApplicationBuilder(args);
 
